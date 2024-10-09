@@ -7,7 +7,7 @@ A demonstration of building a RAG system using langchain + local large model + l
 
 1.  Install dependencies
 ```cmd
-pip install --upgrade langchain langchain-community langchain-chroma
+pip install --upgrade langchain langchain-community langchain-chroma bs4
 ```
 
 #### Instructions

@@ -7,7 +7,7 @@
 
 1. 安装依赖环境
 ```cmd
-pip install --upgrade langchain langchain-community langchain-chroma
+pip install --upgrade langchain langchain-community langchain-chroma bs4
 ```
 
 #### 使用说明
