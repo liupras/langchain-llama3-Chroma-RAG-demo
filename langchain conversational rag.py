@@ -2,15 +2,12 @@
 # -*- coding:utf-8 -*-
 # @author  : 刘立军
 # @time    : 2024-10-9
-# @function: 基于langchian，使用本地部署的大模型llama3、nomic-embed-text和本地部署的矢量数据库chroma实现RAG(RAG，Retrieval Augmented Generation,即：增强生成)
+# @function: 基于langchian和实现的对话式RAG(RAG，Retrieval Augmented Generation,即：增强生成)实现知识问答
 # @version : V0.5
-# @Description ：在问答的过程中，本系统存储以往的问题和答案，产生“记忆”功能，提升会话体验。
+# @Description ：在问答的过程中，系统自动存储以往的问题和答案，产生“记忆”功能，提升会话体验。
 
-# 参考：
-# https://python.langchain.com/docs/integrations/vectorstores/chroma/
-# https://python.langchain.com/v0.2/docs/tutorials/qa_chat_history/
+# 参考：https://python.langchain.com/v0.2/docs/tutorials/qa_chat_history/
 
-# pip install bs4
 import bs4
 
 from langchain.vectorstores import Chroma
@@ -24,6 +21,7 @@ from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import MessagesPlaceholder
 from langchain.chains import create_history_aware_retriever
 from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.runnables.history import RunnableWithMessageHistory
 
 persist_directory = 'chroma_langchain_db_test_2'
 
@@ -71,6 +69,16 @@ def create_db():
 
 # create_db()
 
+from langchain_core.chat_history import BaseChatMessageHistory
+from langchain_community.chat_message_histories import ChatMessageHistory
+store = {}
+
+# 在会话中记录历史聊天记录
+def get_session_history(session_id: str) -> BaseChatMessageHistory:
+    if session_id not in store:
+        store[session_id] = ChatMessageHistory()
+    return store[session_id]
+
 def get_retriever():
     
     # 使用本地矢量数据库创建矢量数据库实例
@@ -80,43 +88,11 @@ def get_retriever():
     return vectorstore.as_retriever()
 
 
-# 简单的问答
-def ask(query):   
-
-    # 定义提示词
-    # {context}将由retriever调用矢量数据库的相似结果填充
-    system_prompt = (
-        "You are an assistant for question-answering tasks. "
-        "Use the following pieces of retrieved context to answer the question. "
-        " If you don't know the answer, say that you don't know. "
-        "Use three sentences maximum and keep the answer concise."
-        "\n\n"
-        "{context}"
-    )
-
-    # {input}将由query填充
-    prompt = ChatPromptTemplate.from_messages(
-        [
-            ("system", system_prompt),
-            ("human", "{input}"),
-        ]
-    )
-
-    llm = get_llm()
-    retriever = get_retriever()
-
-    # 将检索器纳入问答链 
-    question_answer_chain = create_stuff_documents_chain(llm, prompt)    
-    rag_chain = create_retrieval_chain(retriever, question_answer_chain)
-
-    response = rag_chain.invoke({"input":query})
-    return response["answer"]
-
 # 带有历史记录的聊天方法
 # 显然，chat_history可以让模型更能“理解”上下文，做出更加妥帖的回答。
-def chat(query,chat_history):
+def chat(query,session_id):
 
-    # 构建检索器
+    # 构建检索器，将问题放在特定的上下文中进行考虑和回答。
     contextualize_q_system_prompt = (
         "Given a chat history and the latest user question which might reference context in the chat history, "
         "formulate a standalone question which can be understood without the chat history. "
@@ -136,7 +112,7 @@ def chat(query,chat_history):
         llm, retriever, contextualize_q_prompt
     )
 
-    # 将检索器纳入问答链 
+    # 将检索器纳入问答链，回答问题 
     system_prompt = (
         "You are an assistant for question-answering tasks. "
         "Use the following pieces of retrieved context to answer the question. "
@@ -154,29 +130,38 @@ def chat(query,chat_history):
     )
     question_answer_chain = create_stuff_documents_chain(llm, qa_prompt)
     rag_chain = create_retrieval_chain(history_aware_retriever, question_answer_chain)
+    conversational_rag_chain = RunnableWithMessageHistory(
+        rag_chain,
+        get_session_history,
+        input_messages_key="input",
+        history_messages_key="chat_history",
+        output_messages_key="answer",
+    )
 
     # 调用链，返回结果
-    response = rag_chain.invoke({"input": query, "chat_history": chat_history})
+    response = conversational_rag_chain.invoke(
+        {"input": query},
+        config={"configurable": {"session_id": session_id}},
+    )
     return response["answer"]
 
 
-# 测试ask方法
+
 query1 = "What is Task Decomposition?"
 query2 = "What are common ways of doing it?"
-r = ask(query1)
-print (r)
-r = ask(query2)
-print (r)
+session_id = "liu123"
 
 # 测试chat方法
-chat_history = []
-ai_msg_1 = chat(query1, chat_history)
+ai_msg_1 = chat(query1, session_id)
 print (ai_msg_1)
-chat_history.extend(
-    [
-        HumanMessage(content=query1),
-        AIMessage(content=ai_msg_1),
-    ]
-)
-ai_msg_2 = chat(query2, chat_history)
+ai_msg_2 = chat(query2, session_id)
 print (ai_msg_2)
+
+# 查看聊天历史记录
+for message in store[session_id].messages:
+    if isinstance(message, AIMessage):
+        prefix = "AI"
+    else:
+        prefix = "User"
+
+    print(f"{prefix}: {message.content}\n")
