@@ -2,7 +2,7 @@
 # -*- coding:utf-8 -*-
 # @author  : 刘立军
 # @time    : 2024-10-10
-# @function: 使用langserve让langchain提供API，与本地大模型聊天（用langchian开发）
+# @Description: 使用langserve让langchain提供API，与本地大模型聊天（用langchian开发）
 # @version : V0.5
 
 # 参考：https://python.langchain.com/v0.2/docs/tutorials/llm_chain/
