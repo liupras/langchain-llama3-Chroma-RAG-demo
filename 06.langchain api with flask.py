@@ -43,7 +43,6 @@ def translate(language,text):
 
     return result
 
-app = Flask(__name__)
 
 # 定义请求数据json的格式
 schema={
@@ -54,6 +53,8 @@ schema={
         't': {'type': 'string',"minLength": 2,"maxLength": 1000}
     }
 }
+
+app = Flask(__name__)
 
 #翻译API
 @app.route("/trans", methods=['POST'])
