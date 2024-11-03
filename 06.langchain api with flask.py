@@ -20,19 +20,6 @@ from flask import Flask, jsonify, request
 from flasgger import Swagger
 from jsonschema import validate
 
-
-app = Flask(__name__)
-
-# 定义请求数据json的格式
-schema={
-    "type": "object",
-    'required': ['l','t'],
-    'properties': {
-        'l': {'type': 'string',"minLength": 2,"maxLength": 100},
-        't': {'type': 'string',"minLength": 2,"maxLength": 1000}
-    }
-}
-
 # 翻译方法
 def translate(language,text):
     # 1. 创建提示词模板
@@ -55,6 +42,18 @@ def translate(language,text):
     result = chain.invoke({"language": language,"text":text})
 
     return result
+
+app = Flask(__name__)
+
+# 定义请求数据json的格式
+schema={
+    "type": "object",
+    'required': ['l','t'],
+    'properties': {
+        'l': {'type': 'string',"minLength": 2,"maxLength": 100},
+        't': {'type': 'string',"minLength": 2,"maxLength": 1000}
+    }
+}
 
 #翻译API
 @app.route("/trans", methods=['POST'])
