@@ -1,3 +1,5 @@
+#coding=utf-8
+
 #!/usr/bin/python
 # -*- coding:utf-8 -*-
 # @author  : 刘立军
@@ -62,8 +64,12 @@ class response_model(BaseModel):
 # 创建一个FastAPI实例
 app = FastAPI()
 
-# 创建一个处理POST请求的端点
-@app.post("/trans/", response_model=response_model)
+# 创建一个处理POST请求的端点。
+'''
+!注意：设置端点时，建议养成都不加 / 的风格。
+在使用API网关时，如果从API网关传过来的路径是以 / 结尾的话，因为和此端点路径不一致，此端点会自动返回301重定向，导致客户端发生400错误。
+'''
+@app.post("/trans/v1", response_model=response_model)
 async def translate_api(query: query_model):
     """
     翻译文本。
