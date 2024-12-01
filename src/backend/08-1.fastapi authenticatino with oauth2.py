@@ -27,31 +27,19 @@ from typing import Union
 fake_users_db = {
     "liu": {
         "username": "liu",
-        "full_name": "John Doe",
-        "email": "johndoe@example.com",
+        "full_name": "Jack Liu",
+        "email": "liupras@gmail.com",
         "hashed_password": "fakehashedsecret",
         "disabled": False,
     },
     "wang": {
         "username": "wang",
-        "full_name": "Alice Wonderson",
-        "email": "alice@example.com",
+        "full_name": "Mike Wang",
+        "email": "56008507@qq.com",
         "hashed_password": "fakehashedsecret2",
         "disabled": True,
     },
 }
-
-# 加密密码
-def fake_hash_password(password: str):
-    '''
-    使用hash加密后，即便是数据库被盗，窃贼无法获取用户的明文密码，得到的只是哈希值。
-    '''
-    return "fakehashed" + password
-
-# 使用 OAuth2 的 Password 流以及 Bearer 令牌（Token）。
-# tokenUrl="token" 指向的是暂未创建的相对 URL token。这个相对 URL 相当于 ./token。
-# 此设置将会要求客户端把 username 与password 发送至 API 中指定的 URL：http://127.0.0.1:8000/token 。
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 # 用户实体
 class User(BaseModel):
@@ -81,7 +69,19 @@ UserInDB(
 )
 '''
 
-# 根据token返回用户信息
+# 加密密码
+def fake_hash_password(password: str):
+    '''
+    使用hash加密后，即便是数据库被盗，窃贼无法获取用户的明文密码，得到的只是哈希值。
+    '''
+    return "fakehashed" + password
+
+# 使用 OAuth2 的 Password 流以及 Bearer 令牌（Token）。
+# tokenUrl="token" 指向的是暂未创建的相对 URL token。这个相对 URL 相当于 ./token。
+# 此设置将会要求客户端把 username 与password 发送至 API 中指定的 URL：http://127.0.0.1:8000/token 。
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+# 根据token（即：username）返回用户信息
 def fake_decode_token(token):
     # 用username明文做token没有任何安全保障
     user = get_user(fake_users_db, token)
@@ -137,7 +137,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 
 # 获取用户信息
 @app.get("/users/me")
-async def read_users_me(current_user: User = Depends(get_current_user)):
+async def read_users_me(current_user: User = Depends(get_current_active_user)):
     '''
     此处把 current_user 的类型声明为 Pydantic 的 User 模型。
     这有助于在函数内部使用代码补全和类型检查。
@@ -146,7 +146,7 @@ async def read_users_me(current_user: User = Depends(get_current_user)):
     return current_user
 
 # 测试用户是否登录
-@app.get("/items/")
+@app.get("/items")
 async def read_items(token: str = Depends(oauth2_scheme)):
     '''
     Depends 在依赖注入系统中处理安全机制。    
@@ -160,6 +160,6 @@ if __name__ == "__main__":
     import uvicorn
 
     # 交互式API文档地址：
-    # http://127.0.0.1:5001/docs/ 
-    # http://127.0.0.1:5001/redoc/
+    # http://127.0.0.1:8000/docs/ 
+    # http://127.0.0.1:8000/redoc/
     uvicorn.run(app, host="0.0.0.0", port=8000)
