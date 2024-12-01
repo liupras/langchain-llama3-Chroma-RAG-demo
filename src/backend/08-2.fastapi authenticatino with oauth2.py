@@ -9,18 +9,20 @@
 '''
 [FastAPI 安全性](https://fastapi.tiangolo.com/zh/tutorial/security/)
 OAuth是一个关于授权（authorization）的开放网络标准，在全世界得到广泛应用。比如：微信登录、Facebook，Google，Twitter，GitHub等。
+OAuth2 规范要求使用密码流时，客户端或用户必须以表单数据形式发送 username 和 password 字段。因此，不能使用 JSON 对象。
+并且，这两个字段必须命名为 username 和 password。
 [理解OAuth2.0](https://www.ruanyifeng.com/blog/2014/05/oauth_2_0.html)
 JWT 即JSON 网络令牌（JSON Web Tokens）是目前最流行的跨域认证解决方案。它在服务端将用户信息进行签名（如果有保密信息也可以加密后再签名），这样可以防止它被篡改。
 每次客户端提交请求时，都附带JWT内容，这样服务端可以直接读取用户信息，而不用必须从服务器端的会话中获取。
 [JSON Web Token 入门教程](https://ruanyifeng.com/blog/2018/07/json_web_token-tutorial.html)
 '''
-'''
-OAuth2 规范要求使用密码流时，客户端或用户必须以表单数据形式发送 username 和 password 字段。因此，不能使用 JSON 对象。
-并且，这两个字段必须命名为 username 和 password。
-'''
 
 '''依赖项
+# 安装 PyJWT，在 Python 中生成和校验 JWT 令牌
 pip install pyjwt
+
+# Passlib 是处理密码哈希的 Python 包，支持很多安全哈希算法及配套工具。
+# 本教程推荐的算法是 Bcrypt。
 pip install passlib[bcrypt]
 '''
 from fastapi import Depends, FastAPI,HTTPException,status
@@ -34,29 +36,19 @@ from jwt.exceptions import InvalidTokenError
 from typing import Union
 from typing import Annotated
 
-# 密钥。用于JWT签名。
-SECRET_KEY = "09d25d094faa6ca2556c818155b7a9563b93f7099f6f0f4caa6cf63b88e8d1e7"
-'''
-注意，不要使用本例所示的密钥，因为它不安全。
-'''
-
-# 对JWT编码解码的算法。JWT不加密，任何人都能用它恢复原始信息。
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
-
 # 模仿用户数据库
 fake_users_db = {
     "liu": {
         "username": "liu",
-        "full_name": "John Doe",
-        "email": "johndoe@example.com",
+        "full_name": "Jack Liu",
+        "email": "liupras@gmail.com",
         "hashed_password": "$2b$12$XMT2KGR.3pBUszKSl91I6uJDWVZIncZMyqgXzH1KnWqZcPZ/k5pLu",          #12345678
         "disabled": False,
     },
     "wang": {
         "username": "wang",
-        "full_name": "Alice Wonderson",
-        "email": "alice@example.com",
+        "full_name": "Errin Wang",
+        "email": "56008507@qq.com",
         "hashed_password": "$2b$12$WjyqXlyP/TCyysi0HwLWGenjP668dBswX39aKJzByZTlTDZ9kD.5e",          #23456789
         "disabled": True,
     },
@@ -79,22 +71,7 @@ class User(BaseModel):
 
 class UserInDB(User):
     hashed_password: str
-
-# 密码加密，使用算法：bcrypt，每次加密都会生成不同的哈希值。
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-# 校验密码
-def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
-
-# 加密密码
-def get_password_hash(password):
-    '''
-    使用hash加密后，即便是数据库被盗，窃贼无法获取用户的明文密码，得到的只是哈希值。
-    哈希是指把特定内容（本例中为密码）转换为乱码形式的字节序列（其实就是字符串），但这个乱码无法转换回传入的密码。
-    '''
-    return pwd_context.hash(password)
-
+    
 def get_user(db, username: str):
     if username in db:
         user_dict = db[username]
@@ -112,6 +89,31 @@ UserInDB(
     hashed_password = user_dict["hashed_password"],
 )
 '''
+
+# 密钥。用于JWT签名。
+SECRET_KEY = "09d25d094faa6ca2556c818155b7a9563b93f7099f6f0f4caa6cf63b88e8d1e7"
+'''
+注意，不要使用本例所示的密钥，因为它不安全。
+'''
+
+# 对JWT编码解码的算法。JWT不加密，任何人都能用它恢复原始信息。
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+# 使用bcrypt加密密码：每次加密都会生成不同的哈希值。
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# 校验密码：校验接收的密码是否匹配存储的哈希值。
+def verify_password(plain_password, hashed_password):
+    return pwd_context.verify(plain_password, hashed_password)
+
+# 加密密码
+def get_password_hash(password):
+    '''
+    使用hash加密后，即便是数据库被盗，窃贼无法获取用户的明文密码，得到的只是哈希值。
+    哈希是指把特定内容（本例中为密码）转换为乱码形式的字节序列（其实就是字符串），但这个乱码无法转换回传入的密码。
+    '''
+    return pwd_context.hash(password)
 
 # 认证用户
 def authenticate_user(fake_db, username: str, password: str):
@@ -151,7 +153,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        # 在JWT 规范中，sub 键得值是令牌的主题。
+        # 在JWT 规范中，sub 键的值是令牌的主题。
         username: str = payload.get("sub")
         if username is None:
             raise credentials_exception
