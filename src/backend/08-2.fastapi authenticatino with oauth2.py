@@ -17,42 +17,21 @@ JWT 即JSON 网络令牌（JSON Web Tokens）是目前最流行的跨域认证�
 [JSON Web Token 入门教程](https://ruanyifeng.com/blog/2018/07/json_web_token-tutorial.html)
 '''
 
-'''依赖项
-# 安装 PyJWT，在 Python 中生成和校验 JWT 令牌
-pip install pyjwt
-
-# Passlib 是处理密码哈希的 Python 包，支持很多安全哈希算法及配套工具。
-# 本教程推荐的算法是 Bcrypt。
-pip install passlib[bcrypt]
-'''
-from fastapi import Depends, FastAPI,HTTPException,status
+from fastapi import Body, Depends, FastAPI, HTTPException,status,Request
 from fastapi.security import OAuth2PasswordBearer,OAuth2PasswordRequestForm
 from pydantic import BaseModel
-from passlib.context import CryptContext
-from datetime import datetime, timedelta, timezone
-import jwt
-from jwt.exceptions import InvalidTokenError
 
-from typing import Union
+from typing import  Union
 from typing import Annotated
 
-# 模仿用户数据库
-fake_users_db = {
-    "liu": {
-        "username": "liu",
-        "full_name": "Jack Liu",
-        "email": "liupras@gmail.com",
-        "hashed_password": "$2b$12$XMT2KGR.3pBUszKSl91I6uJDWVZIncZMyqgXzH1KnWqZcPZ/k5pLu",          #12345678
-        "disabled": False,
-    },
-    "wang": {
-        "username": "wang",
-        "full_name": "Errin Wang",
-        "email": "56008507@qq.com",
-        "hashed_password": "$2b$12$WjyqXlyP/TCyysi0HwLWGenjP668dBswX39aKJzByZTlTDZ9kD.5e",          #23456789
-        "disabled": True,
-    },
-}
+from gateway.config.config import config
+ACCESS_TOKEN_EXPIRE_MINUTES = config["token"]["expires_time"]
+
+# 加载用户数据库
+import json
+
+with open('gateway/common/users.json', 'r', encoding='utf-8') as file:
+    fake_users_db = json.load(file)
 
 # Token实体
 class Token(BaseModel):
@@ -90,30 +69,7 @@ UserInDB(
 )
 '''
 
-# 密钥。用于JWT签名。
-SECRET_KEY = "09d25d094faa6ca2556c818155b7a9563b93f7099f6f0f4caa6cf63b88e8d1e7"
-'''
-注意，不要使用本例所示的密钥，因为它不安全。
-'''
-
-# 对JWT编码解码的算法。JWT不加密，任何人都能用它恢复原始信息。
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
-
-# 使用bcrypt加密密码：每次加密都会生成不同的哈希值。
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-# 校验密码：校验接收的密码是否匹配存储的哈希值。
-def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
-
-# 加密密码
-def get_password_hash(password):
-    '''
-    使用hash加密后，即便是数据库被盗，窃贼无法获取用户的明文密码，得到的只是哈希值。
-    哈希是指把特定内容（本例中为密码）转换为乱码形式的字节序列（其实就是字符串），但这个乱码无法转换回传入的密码。
-    '''
-    return pwd_context.hash(password)
+from gateway.util.password import verify_password 
 
 # 认证用户
 def authenticate_user(fake_db, username: str, password: str):
@@ -124,21 +80,12 @@ def authenticate_user(fake_db, username: str, password: str):
         return False
     return user
 
-# 生成JWT
-def create_access_token(data: dict, expires_delta: timedelta | None = None):
-    to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.now(timezone.utc) + expires_delta
-    else:
-        expire = datetime.now(timezone.utc) + timedelta(minutes=15)
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
-
 # 使用 OAuth2 的 Password 流以及 Bearer 令牌（Token）。
 # tokenUrl="token" 指向的是暂未创建的相对 URL token。这个相对 URL 相当于 ./token。
 # 此设置将会要求客户端把 username 与password 发送至 API 中指定的 URL：http://127.0.0.1:8000/token 。
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+from gateway.util.token import decode_access_token
 
 # 根据token获取当前登录的用户信息
 # 该函数接收 str 类型的令牌，并返回 Pydantic 的 User 模型
@@ -152,13 +99,13 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = decode_access_token(token)
         # 在JWT 规范中，sub 键的值是令牌的主题。
         username: str = payload.get("sub")
         if username is None:
             raise credentials_exception
         token_data = TokenData(username=username)
-    except InvalidTokenError:
+    except Exception:
         raise credentials_exception
     user = get_user(fake_users_db, username=token_data.username)
     if user is None:
@@ -178,9 +125,41 @@ async def get_current_active_user(current_user: User = Depends(get_current_user)
 # 创建一个FastAPI实例
 app = FastAPI()
 
+# 允许跨域访问
+from fastapi.middleware.cors import CORSMiddleware
+origins = config["origins"]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# 打印请求日志，可用于和客户端调试
+async def log_request_details(request: Request):
+    client_host = request.client.host
+    client_port = request.client.port
+    method = request.method
+    url = request.url
+    headers = request.headers
+    body = None
+    if request.form:    
+        body = await request.form()
+    elif request.body:
+        body = await request.body()
+
+    print(f"Client: {client_host}:{client_port}")
+    print(f"Method: {method} URL: {url}")
+    print(f"Headers: {headers}")
+    print(f"Body: {body if body else 'No Body'}")
+
+
+from gateway.util.token import create_access_token
+
 # 登录方法
 @app.post("/token")
-async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends())-> Token:
+async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(),remember: bool|None=Body(None),log_details: None = Depends(log_request_details))-> Token:
     '''
     OAuth2PasswordRequestForm 是用以下几项内容声明表单请求体的类依赖项：
 
@@ -188,17 +167,20 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
     password
     scope、grant_type、client_id等可选字段。
     '''
+    
     user = authenticate_user(fake_users_db, form_data.username, form_data.password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
+            detail="用户名或者密码错误",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": user.username}, expires_delta=access_token_expires
-    )
+    m = 0
+    if remember:
+        m = ACCESS_TOKEN_EXPIRE_MINUTES
+    
+    # 在JWT 规范中，sub 键的值是令牌的主题。
+    access_token = create_access_token(data={"sub": user.username},encrypted_text=user.userid, expire_minutes=m)
 
     # 响应返回的内容应该包含 token_type。本例中用的是BearerToken，因此， Token 类型应为bearer。
     return Token(access_token=access_token, token_type="bearer")
@@ -224,6 +206,7 @@ async def read_own_items(current_user: Annotated[User, Depends(get_current_activ
     '''
 
     return [{"item_id": "Foo", "owner": current_user.username}]
+
 
 if __name__ == "__main__":
     import uvicorn

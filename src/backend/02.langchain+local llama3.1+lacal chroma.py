@@ -9,9 +9,9 @@
 # https://python.langchain.com/docs/integrations/vectorstores/chroma/
 # https://github.com/hwchase17/chroma-langchain/blob/master/persistent-qa.ipynb
 
-from langchain.vectorstores import Chroma
+from langchain_chroma import Chroma
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.embeddings import OllamaEmbeddings
+from langchain_community.embeddings import OllamaEmbeddings
 from langchain_ollama.llms import OllamaLLM
 from langchain.chains import VectorDBQA
 from langchain.document_loaders import TextLoader
@@ -29,7 +29,7 @@ def create_db():
 
     # 用来加载文本文件。
     # 指定文件使用tf-8编码读取，以确保正确处理非ASCII字符。
-    loader = TextLoader('doc/state_of_the_union.txt',encoding='utf-8')
+    loader = TextLoader('data/state_of_the_union.txt',encoding='utf-8')
     documents = loader.load()
 
     # 用于将长文本拆分成较小的段，便于嵌入和大模型处理。
