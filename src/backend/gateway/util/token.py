@@ -33,7 +33,7 @@ ALGORITHM = "HS256"
 
 DEFAULT_TOKEN_EXPIRE_MINUTES = config['token']["default_expires_time"]   #默认token过期时间
 
-# 加密签名：userid + password + timestamp
+# 加密签名：userid + timestamp
 def get_sign(encrypted_text,access_token_expires):
     t = str(math.floor(access_token_expires.timestamp()))
     #print(f"access_token_expires is {t}")

@@ -58,7 +58,7 @@
   </v-container>
 </template>
     
-  <script setup>
+<script setup>
 import { ref } from "vue";
 import axios from "axios";
 import { jwtDecode } from "jwt-decode";
