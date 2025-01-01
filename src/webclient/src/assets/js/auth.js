@@ -24,9 +24,21 @@ const getUserId =() => {
   const token = getToken();
   if (token) {
     const decodedToken = jwtDecode(token);
-    return decodedToken.sub;
+
+    // 校验过期时间
+    let exp_str = decodedToken['exp'];    
+    let exp = parseInt(exp_str);   
+    let now = parseInt(Date.now()/1000);    //转换为秒
+    if (exp > now) {
+      let diffDays = Math.floor((exp-now) / (60 * 60 * 24));
+      console.log("token还有"+diffDays+"天过期。");
+      return decodedToken.sub;
+    }else{
+      return null;
+    }    
+  }else{
+    return null;
   }
-  return null;
 };
 
 const logout = () => {
@@ -35,7 +47,7 @@ const logout = () => {
 };
 
 const checkLoggedIn = () => {
-  return !!getToken();
+  return !!getUserId();
 };
 
 export {setToken, getToken, logout, checkLoggedIn,getUserId};

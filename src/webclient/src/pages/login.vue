@@ -63,7 +63,7 @@ import { ref } from "vue";
 import axios from "axios";
 import { jwtDecode } from "jwt-decode";
 
-import { setToken, getToken } from "@/assets/js/auth";
+import { setToken } from "@/assets/js/auth";
 
 const login_url = "http://127.0.0.1:8000/token";
 
